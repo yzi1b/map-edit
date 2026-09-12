@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+
+# 本地测试服务器（run-paper 生成）
+run/
+
+# IDE
+.idea/
+*.iml
+out/
+.vscode/
+
+# Python
+__pycache__/
+
+# OS
+Thumbs.db
+.DS_Store

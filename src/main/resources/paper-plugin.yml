@@ -1,0 +1,18 @@
+name: MapEdit
+version: '1.0.0'
+main: cn.lyricraft.mapedit.MapEdit
+api-version: '26.2'
+commands:
+  mapedit:
+    description: 地图画编辑主指令
+    usage: /mapedit <web|give|deploy>
+permissions:
+  mapedit.web:
+    description: 生成 Web 访问 token
+    default: op
+  mapedit.give:
+    description: 使用 /mapedit give 获取地图画地图
+    default: op
+  mapedit.deploy:
+    description: 使用 /mapedit deploy 发放部署道具
+    default: op

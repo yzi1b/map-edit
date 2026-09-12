@@ -1,0 +1,1886 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>地图画 · MapEdit</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f5f6f8; --panel:#ffffff; --line:#e3e6ea; --line2:#edf0f3;
+  --txt:#1b2430; --mut:#77828f; --acc:#2f6fed; --acc-h:#2760d6; --acc-weak:#e8f0fe;
+  --danger:#d93a3a; --danger-weak:#fdf0f0;
+  --chip:#eef1f4; --shadow:0 1px 2px rgba(16,24,40,.05);
+  --radius:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;font:14px/1.5 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--txt);background:var(--bg);display:flex;flex-direction:column;overflow:hidden;
+}
+p{margin:4px 0}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid rgba(47,111,237,.55);outline-offset:1px}
+
+/* 顶栏 */
+header{height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 18px;
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-size:15px;font-weight:700;letter-spacing:.3px}
+.sub{font-size:12px;color:var(--mut);margin-top:2px}
+.spacer{flex:1}
+
+/* 主区三栏 */
+main{flex:1;display:flex;min-height:0}
+aside{border-color:var(--line)}
+#treePane{width:232px;flex:none;overflow:auto;padding:8px 0 24px;background:var(--panel);border-right:1px solid var(--line)}
+#galleryPane{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+#detailPane{width:344px;flex:none;overflow:auto;background:var(--panel);border-left:1px solid var(--line)}
+
+/* 通用按钮 */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--line);background:var(--panel);font-size:13px;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s;white-space:nowrap}
+.btn svg{flex:none}
+.btn:hover{background:var(--line2)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.primary:hover{background:var(--acc-h)}
+.btn.ghost{background:transparent;border-color:transparent;color:#46505e}
+.btn.ghost:hover{background:var(--line2)}
+.btn.danger{color:var(--danger);border-color:var(--line)}
+.btn.danger:hover{background:var(--danger-weak);border-color:#f0c9c9}
+.btn.wide{width:100%;justify-content:center;padding:8px 10px}
+/* 提交进行中:确定按钮压灰(宽度随文字自然变化:先窄,处理中才变宽) */
+#fGo:disabled,#fGo:disabled:hover{background:var(--line2);border-color:var(--line);color:var(--mut);cursor:default;box-shadow:none}
+.btn:disabled{opacity:.5;cursor:default;pointer-events:none}
+
+/* 目录树 */
+.tn{display:flex;align-items:center;gap:6px;margin:1px 8px;padding:5px 8px;border-radius:7px;
+  cursor:pointer;color:var(--txt);white-space:nowrap;user-select:none}
+.tn:hover{background:var(--line2)}
+.tn.sel{background:var(--acc-weak)}
+.tn.sel .nm{color:var(--acc);font-weight:600}
+.tn .ico{flex:none;display:flex;color:var(--mut)}
+.tn.sel .ico{color:var(--acc)}
+.tn .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:13.5px}
+.tn .del{flex:none;opacity:0;width:18px;height:18px;border-radius:5px;display:flex;
+  align-items:center;justify-content:center;font-size:11px;color:var(--mut)}
+.tn .del:hover{background:#f2d7d7;color:var(--danger)}
+.tn:hover .del{opacity:1}
+.tn .ren{flex:none;opacity:0;width:18px;height:18px;border-radius:5px;display:flex;
+  align-items:center;justify-content:center;color:var(--mut)}
+.tn .ren:hover{background:#dce8fd;color:var(--acc)}
+.tn:hover .ren{opacity:1}
+/* 按钮内图标继承按钮前景:防 .tn .ico/.tn.sel .ico 把按钮图标染蓝(删除键是文本不受影响) */
+.tn .ren .ico{color:inherit}
+.tn .chev{flex:none;width:14px;height:16px;display:flex;align-items:center;justify-content:center;
+  color:#9aa4b2;border-radius:4px;margin-right:-3px}
+.tn .chev:hover{background:var(--line2);color:var(--txt)}
+.tn .chev svg{transition:transform .14s}
+.tn .chev.open svg{transform:rotate(90deg)}
+/* 叶子目录(无子目录):隐藏但保留宽度的占位,保持各行的图标列对齐 */
+.tn .chev.leaf{visibility:hidden;margin-right:-3px}
+/* 树顶部:根目录 + 新建文件夹 各占半行 */
+.trootbar{display:flex;gap:6px;padding:6px 8px 4px}
+.trootbar .btn{flex:1;min-width:0;justify-content:center;padding:7px 4px;border-radius:8px;font-size:13px}
+.trootbar .rootbtn.sel{background:var(--acc-weak);color:var(--acc);border-color:var(--acc-weak);font-weight:600}
+.dlg-body{padding:6px 18px 18px}
+.dlg-body .dlg-text{font-size:13.5px;line-height:1.8;color:var(--txt);margin:12px 0 4px;word-break:break-all}
+.dlg-body .dlg-text b{color:var(--txt)}
+.dlg-body .dlg-text .mut{color:var(--mut)}
+
+/* 中栏:目录工具条 + 卡片 */
+.ghead{display:flex;align-items:center;gap:10px;padding:14px 18px 12px;flex-wrap:wrap}
+.ghead .path{font-size:15px;font-weight:650;margin-right:auto;display:flex;align-items:center;
+  gap:8px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ghead .path .crumbs{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crumb{color:var(--mut);font-weight:400}
+.gbtns{display:flex;gap:8px}
+.cards{flex:1;overflow:auto;display:grid;gap:14px;padding:4px 18px 26px;
+  grid-template-columns:repeat(auto-fill,minmax(168px,1fr));align-content:start}
+.emptybox{grid-column:1/-1;padding:70px 10px;text-align:center;color:var(--mut);font-size:13px}
+.emptybox svg{color:#b9c1cc;margin-bottom:10px}
+.emptybox p{margin:4px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  cursor:pointer;overflow:hidden;box-shadow:var(--shadow);transition:border-color .12s,box-shadow .12s,transform .12s;min-width:0}
+.card:hover{border-color:#cfd5dd;box-shadow:0 3px 10px rgba(16,24,40,.08)}
+.card.sel{border-color:var(--acc);box-shadow:0 0 0 2px rgba(47,111,237,.18)}
+.thumb{position:relative;height:112px;background:#f2f4f7;display:flex;align-items:center;justify-content:center}
+.thumb img{max-width:100%;max-height:100%;width:auto;height:auto;display:block;opacity:0;transition:opacity .18s}
+.thumb img.ready{opacity:1}
+.badge{position:absolute;top:7px;right:7px;font-size:11px;line-height:1;
+  padding:3px 6px;border-radius:999px;background:rgba(255,255,255,.92);
+  border:1px solid var(--line);color:#4d5766;letter-spacing:.3px}
+.cname{padding:7px 8px 9px;font-size:13px;display:flex;align-items:center;gap:4px}
+.cname .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cname .cdel{flex:none;opacity:0;width:21px;height:21px;border-radius:6px;display:flex;
+  align-items:center;justify-content:center;color:var(--mut);font-size:11.5px}
+.card:hover .cdel{opacity:1}
+.cname .cdel:hover{background:#f2d7d7;color:var(--danger)}
+.cname .cren{flex:none;opacity:0;width:21px;height:21px;border-radius:6px;display:flex;
+  align-items:center;justify-content:center;color:var(--mut)}
+.card:hover .cren{opacity:1}
+.cname .cren:hover{background:#dce8fd;color:var(--acc)}
+
+/* 右栏 */
+#detailPane{display:flex;flex-direction:column}
+.dhint{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;color:var(--mut);font-size:13px;text-align:center;padding:30px}
+.dhint svg{color:#c2cad4;margin-bottom:4px}
+.dbody{padding:16px 16px 20px;display:flex;flex-direction:column;min-height:0}
+.dname{font-size:16px;font-weight:700;word-break:break-all}
+.dpath{margin-top:3px;font-size:12px;color:var(--mut);word-break:break-all;white-space:pre-wrap}
+.dmeta{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.chip{font-size:11.5px;line-height:1;padding:4px 8px;border-radius:999px;background:var(--chip);color:#4d5766}
+.dview{margin:14px 0 4px;display:flex;align-items:flex-start;justify-content:center;background:#f6f7f9;
+  border:1px solid var(--line);border-radius:9px;padding:8px;min-height:90px}
+.dview canvas{max-width:100%;height:auto}
+.dview .loading{color:var(--mut);font-size:13px;padding:26px 0}
+.dbtns{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line2)}
+
+/* 弹窗 */
+.ov{position:fixed;inset:0;background:rgba(28,34,45,.42);display:flex;align-items:center;
+  justify-content:center;z-index:60}
+.modal{background:var(--panel);border-radius:14px;box-shadow:0 18px 54px rgba(12,20,36,.22);
+  display:flex;flex-direction:column;overflow:hidden;width:min(920px,92vw,calc(84vh*4/3));
+  aspect-ratio:4/3;max-height:84vh}
+.modal.sm{width:min(380px,92vw);aspect-ratio:auto;max-height:none}
+.mhead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.mhead h2{font-size:15px;margin:0;flex:1}
+.iconbtn{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--mut)}
+.iconbtn:hover{background:var(--line2);color:var(--txt)}
+.mbody{display:flex;min-height:0;flex:1;overflow:hidden}
+.mform{width:302px;flex:none;padding:6px 18px 16px;border-right:1px solid var(--line);overflow-y:auto}
+.mprev{flex:1;min-width:0;padding:12px;display:flex;flex-direction:column;gap:10px;background:#f6f8fa;overflow:hidden}
+.cropwrap{position:relative;flex:1;min-height:0;width:100%;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.cropwrap canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.chessbg{background-color:#f6f8fa;background-image:linear-gradient(45deg,#e6eaf0 25%,transparent 25%,transparent 75%,#e6eaf0 75%),linear-gradient(45deg,#e6eaf0 25%,transparent 25%,transparent 75%,#e6eaf0 75%);background-size:16px 16px;background-position:0 0,8px 8px}
+.pickhint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#98a2b0;user-select:none;z-index:5;cursor:pointer}
+.pickhint .phplus{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.88);border:1.5px dashed #b9c2ce;display:flex;align-items:center;justify-content:center;color:#7d8896;box-shadow:0 1px 4px rgba(16,24,40,.06)}
+.fbar{flex:none;width:100%;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:#fff;border:1px solid var(--line);border-radius:10px;min-width:0}
+.fbar .fname{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mPrev.dragover{box-shadow:inset 0 0 0 2px var(--acc);background:#eef4fe}
+.mfootbar{display:flex;align-items:center;gap:14px;padding:12px 18px 14px;border-top:1px solid var(--line2)}
+.mfootbar .loc{flex:1;min-width:0;font-size:12.5px;color:var(--mut);word-break:break-all}
+.mfootbar .mbtns{flex:none;display:flex;gap:8px}
+label.flabel{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px}
+input[type=text],input[type=number],select{width:100%;padding:7px 10px;border:1px solid var(--line);
+  border-radius:8px;font-size:13px;background:#fff;color:var(--txt);font-family:inherit}
+input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--acc);outline:none;
+  box-shadow:0 0 0 3px rgba(47,111,237,.13)}
+.grid2{display:flex;gap:8px}
+.grid2>div{flex:1}
+input[type=range]{width:100%;accent-color:var(--acc);margin:4px 0 2px;display:block}
+input[type=checkbox]{accent-color:var(--acc);width:15px;height:15px;margin:0}
+.srow{display:flex;gap:10px;font-size:12px;color:var(--mut);align-items:center}
+.srow .pv{flex:none;min-width:34px;text-align:right;color:var(--txt);font-variant-numeric:tabular-nums}
+.pick{display:flex;align-items:center;gap:9px;margin-top:2px}
+.pick .fname{font-size:12px;color:var(--mut);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow{margin:8px 0 2px}
+.chkrow{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--txt);margin-top:12px}
+.mbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.mfoot{font-size:12px;color:var(--mut);margin-top:6px}
+
+/* toast */
+#toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;
+  z-index:90;max-width:min(520px,70vw)}
+.toast{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);
+  border-radius:10px;box-shadow:0 8px 26px rgba(16,24,40,.14);padding:10px 14px;
+  font-size:13px;word-break:break-all;animation:tin .16s ease-out}
+.toast.err{border-left-color:var(--danger)}
+.toast.out{opacity:0;transition:opacity .22s}
+@keyframes tin{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
+
+/* 会话遮罩 / 致命错误条 */
+#sessionOv{position:fixed;inset:0;z-index:100;background:rgba(245,247,250,.86);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center}
+#sessionOv .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 16px 48px rgba(12,20,36,.12);padding:34px 40px;text-align:center;
+  max-width:min(480px,88vw);display:flex;flex-direction:column;align-items:center;gap:6px}
+#sessionOv .se-ico{width:64px;height:64px;border-radius:50%;background:var(--acc-weak);
+  display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+#sessionOv .se-ico svg{color:var(--acc)}
+#sessionOv .card h3{margin:0;font-size:17px}
+#sessionOv .card p{margin:0;font-size:13.5px;color:var(--mut);line-height:1.8}
+#sessionOv .card p b{color:var(--txt);font-weight:650}
+#sessionOv .card .se-hint{margin-top:10px;font-size:12px;color:#a6aeb8}
+#fatal{position:fixed;left:16px;bottom:16px;z-index:110;background:#fff6f5;border:1px solid #f2c4c4;
+  color:#a32727;font:12px/1.6 ui-monospace,Consolas,monospace;padding:10px 14px;border-radius:10px;
+  white-space:pre-wrap;max-width:min(560px,70vw);display:none;cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#d3d8df;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#b9c0ca;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+/* 按钮内图标:继承按钮前景色并垂直居中(修复树内按钮图标被 .tn .ico 染灰/错位) */
+.btn .ico{color:inherit;display:inline-flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">地图画</span>
+  <span class="sub">MapEdit</span>
+</header>
+
+<main>
+  <aside id="treePane" aria-label="目录树"></aside>
+
+  <section id="galleryPane">
+    <div class="ghead">
+      <div class="path" id="pathText"></div>
+      <div class="gbtns">
+        <button id="btnNewPaint" class="btn primary"></button>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <aside id="detailPane"></aside>
+</main>
+
+<div id="toasts"></div>
+
+<!-- 统一确认 / 提示弹窗 -->
+<div class="ov" id="dlgOv" style="display:none">
+  <div class="modal sm">
+    <div class="mhead">
+      <h2 id="dlgTitle">提示</h2>
+      <button class="iconbtn" id="dlgClose" title="关闭"></button>
+    </div>
+    <div class="dlg-body">
+      <p class="dlg-text" id="dlgText"></p>
+      <div class="mbtns">
+        <button class="btn" id="dlgOk">确定</button>
+        <button class="btn" id="dlgCancel">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 新建文件夹 -->
+<div class="ov" id="folderOv" style="display:none">
+  <div class="modal sm">
+    <div class="mhead"><h2>新建文件夹</h2><button class="iconbtn" id="folderClose" title="关闭"></button></div>
+    <div style="padding:16px 18px">
+      <label class="flabel" style="margin-top:0">在「<span id="folderParent"></span>」下创建</label>
+      <input type="text" id="folderName" maxlength="64" placeholder="文件夹名称" autocomplete="off">
+      <div class="mbtns"><button class="btn" id="folderCancel">取消</button>
+        <button class="btn primary" id="folderOk">创建</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 重命名(文件夹 / 地图画共用) -->
+<div class="ov" id="renameOv" style="display:none">
+  <div class="modal sm">
+    <div class="mhead"><h2>重命名</h2><button class="iconbtn" id="renameClose" title="关闭"></button></div>
+    <div style="padding:16px 18px">
+      <label class="flabel" style="margin-top:0">名称</label>
+      <input type="text" id="renameName" maxlength="64" autocomplete="off">
+      <div id="renameAt" style="font-size:12px;color:var(--mut);margin-top:7px"></div>
+      <div class="mbtns"><button class="btn" id="renameCancel">取消</button>
+        <button class="btn primary" id="renameOk">确定</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- 新建 / 替换地图画 -->
+<div class="ov" id="modalOv" style="display:none">
+  <div class="modal">
+    <div class="mhead">
+      <h2 id="mTitle">新建地图画</h2>
+      <button class="iconbtn" id="mClose" title="关闭"></button>
+    </div>
+    <div class="mbody">
+      <div class="mform">
+        <div id="fNameWrap"><label class="flabel" style="margin-top:10px">名称</label>
+          <input type="text" id="fName" maxlength="64" autocomplete="off"></div>
+        <label class="flabel">网格(横 × 纵,决定裁剪比例)</label>
+        <div class="grid2">
+          <div><input type="number" id="fCols" min="1" max="32" value="2"></div>
+          <div><input type="number" id="fRows" min="1" max="32" value="2"></div>
+        </div>
+        <label class="flabel">色差公式</label>
+        <select id="fDistMode">
+          <option value="rgb" selected>RGB 欧式距离</option>
+          <option value="cie94">CIE94</option>
+          <option value="ciede2000">CIEDE2000</option>
+        </select>
+        <label class="flabel">量化方式</label>
+        <select id="fQuantMode">
+          <option value="smooth" selected>基础</option>
+          <option value="maxdetail">误差扩散抖动</option>
+        </select>
+        <label class="chkrow"><input type="checkbox" id="fQuant" checked> 预览显示量化效果</label>
+      </div>
+      <div class="mprev" id="mPrev">
+        <div class="cropwrap chessbg" id="cropWrap">
+          <canvas id="cv"></canvas>
+          <input type="file" id="fFile" accept="image/*" style="display:none">
+          <div class="pickhint" id="pickHint">
+            <span class="phplus"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+            <span class="phtext">选择一张图片</span>
+          </div>
+        </div>
+        <div class="fbar" id="fbar" style="display:none">
+          <span class="fname" id="fFileName"></span>
+          <button class="btn" id="fPickBtn"></button>
+        </div>
+      </div>
+    </div>
+    <div class="mfootbar">
+      <span class="loc" id="fParentText"></span>
+      <span class="mbtns">
+        <button class="btn" id="fCancel">取消</button>
+        <button class="btn primary" id="fGo">确定</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div id="sessionOv" style="display:none">
+  <div class="card">
+    <span class="se-ico"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg></span>
+    <h3>无法访问地图画编辑器</h3>
+    <p>身份认证无效/过期，或权限不足。<br>请在游戏中使用 <b>/mapedit web</b> 指令获取最新 URL 访问。</p>
+    <p class="se-hint">本页面可关闭</p>
+  </div>
+</div>
+<div id="fatal"></div>
+
+<script>
+"use strict";
+
+// ===== 图标(单色描边) =====
+const IC = {
+  folder: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 7.2A1.7 1.7 0 0 1 4.9 5.5h3.9l1.8 2h8.5a1.7 1.7 0 0 1 1.7 1.7v8a1.7 1.7 0 0 1-1.7 1.7H4.9a1.7 1.7 0 0 1-1.7-1.7z"/></svg>',
+  paint: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="8.8" cy="9.4" r="1.4"/><path d="m4 17.5 4.6-4.6 3.4 3.3 2.7-2.7 5.3 5.2"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>',
+  download: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7"/><path d="M6.5 7 7.5 19a1.5 1.5 0 0 0 1.5 1.4h6A1.5 1.5 0 0 0 16.5 19L17.5 7"/><path d="M10 11v5.5M14 11v5.5"/></svg>',
+  x: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  hint: '<svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="8.8" cy="9.4" r="1.4"/><path d="m4 17.5 4.6-4.6 3.4 3.3 2.7-2.7 5.3 5.2"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>',
+  rename: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="m13.5 6.5 3 3"/></svg>',
+};
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function ic(name) {
+  const s = document.createElement("span");
+  s.className = "ico";
+  s.innerHTML = IC[name];
+  return s;
+}
+function btnWithIcon(btn, name) {
+  const el = document.createElement("span");
+  el.className = "ico";
+  el.innerHTML = IC[name];
+  btn.prepend(el);
+}
+
+// ===== 全局错误落地 =====
+window.addEventListener("error", ev => showFatal("JS错误: " + (ev.message || ev.type)
+    + " @ " + (ev.filename || "").split("/").pop() + ":" + ev.lineno));
+window.addEventListener("unhandledrejection", ev => showFatal("异步错误: " + ev.reason));
+function showFatal(text) {
+  const d = document.getElementById("fatal");
+  d.textContent = (d.textContent ? d.textContent + "\n---\n" : "") + text;
+  d.style.display = "block";
+}
+document.getElementById("fatal").onclick = () => {
+  document.getElementById("fatal").textContent = "";
+  document.getElementById("fatal").style.display = "none";
+};
+
+// ===== 状态 =====
+const QS = new URLSearchParams(location.search);
+const TOKEN = QS.get("token") || "";
+let palette = [];          // index by signed byte b+128 -> int color
+let transparentSlot = [];  // true = 透明槽(仅显式透明用)
+let distMode = "rgb";      // rgb(默认) | cie94 | ciede2000(nearestIdx 共用;LUT 公式走预建最近色表)
+let lutEpoch = 0, lutReady = 0;  // 调色板代际 / 0未建 1构建中 2就绪
+let lutFormula = null;     // lutBuf 所用色差公式(与 distMode 不一致视为未就绪)
+let lutBuilding = null;    // 构建中的公式(供中止判定)
+let lutBuf = null;         // Int8Array(1<<15):(r>>3,g>>3,b>>3) 格 → 最近色板 signed byte
+let palLab = null;         // Float64Array(256*3),无效槽为 NaN(透明等)
+let tree = null;           // /api/tree 响应
+let curDir = "";           // 当前目录路径(无前导/)
+let sel = null;            // 选中画 {path,name,cols,rows}
+let cardsEpoch = 0;        // 卡片区代际:切换目录后丢弃在途缩略图
+let img = null, replacePath = null, submitting = false;
+
+const $ = id => document.getElementById(id);
+
+// ===== API / 反馈 =====
+const api = async (path, opts) => {
+  const o = opts || {};
+  o.headers = Object.assign({}, o.headers || {});
+  const url = path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN);
+  const r = await fetch(url, o);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401) showSessionExpired();
+    throw new Error(j.error || ("HTTP " + r.status));
+  }
+  return j;
+};
+
+function showSessionExpired() {
+  const d = $("sessionOv");
+  if (d.style.display !== "none") return;
+  d.style.display = "flex";
+}
+
+function toast(text, isErr, ttl) {
+  const wrap = $("toasts");
+  const t = document.createElement("div");
+  t.className = "toast" + (isErr ? " err" : "");
+  t.textContent = text;
+  wrap.append(t);
+  setTimeout(() => {
+    t.classList.add("out");
+    setTimeout(() => t.remove(), 240);
+  }, ttl || 2600);
+}
+
+// ===== 统一确认/提示弹窗(空白点击无事件,关闭走叉或按钮) =====
+let dlgAction = null;
+function showDialog(title, text, opts) {
+  opts = opts || {};
+  $("dlgTitle").textContent = title;
+  $("dlgText").innerHTML = text;
+  const ok = $("dlgOk");
+  ok.textContent = opts.okText || "确定";
+  ok.className = "btn" + (opts.danger ? " danger" : "");
+  dlgAction = opts.onOk || null;
+  $("dlgOv").style.display = "flex";
+}
+function hideDialog() {
+  $("dlgOv").style.display = "none";
+  dlgAction = null;
+}
+$("dlgOk").onclick = () => {
+  const a = dlgAction;
+  hideDialog();
+  if (a) a();
+};
+$("dlgCancel").onclick = hideDialog;
+$("dlgClose").onclick = hideDialog;
+$("dlgClose").appendChild(ic("x"));
+
+async function copyText(text, done) {
+  const ok = () => {
+    toast(text.length > 90 ? text.slice(0, 90) + "…" : text, false, 2200);
+    if (done) done();
+  };
+  try {
+    await navigator.clipboard.writeText(text);
+    ok();
+  } catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.append(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      ok();
+    } catch (e2) {
+      toast("复制失败,请手动输入: " + text, true, 5000);
+    }
+  }
+}
+
+// ===== 调色板 =====
+async function loadPalette() {
+  const p = await api("/api/palette");
+  palette = new Array(256).fill(null);
+  transparentSlot = new Array(256).fill(false);
+  for (const e of p.colors) {
+    palette[e.b + 128] = parseInt(e.rgb, 16);
+    if (e.transparent) transparentSlot[e.b + 128] = true;
+  }
+  lutEpoch++; lutBuf = null; lutReady = 0; lutFormula = null; palLab = null;  // 色板换代 → LUT 失效
+  if (distMode !== "rgb") kickLutBuild();   // 默认公式是 LUT 公式:随色板加载预热建表,首次预览不等待
+}
+function nearestIdx(r, g, b) {
+  if (distMode === "rgb") {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < 256; i++) {
+      const c = palette[i];
+      if (c == null || transparentSlot[i]) continue;
+      const dr = r - ((c >> 16) & 255), dg = g - ((c >> 8) & 255), db = b - (c & 255);
+      const d = dr * dr + dg * dg + db * db;
+      if (d < bestD) { bestD = d; best = i - 128; }
+    }
+    return best;
+  }
+  ensureLut();
+  return lutBuf[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)];
+}
+
+// ===== CIE94 / CIEDE2000 色差(共用 Lab 与 32³ 最近色 LUT) =====
+// Lab 级公式代价高,无法逐像素对 256 色板全算:预建 32³ RGB 格 LUT(格中心对
+// 色板按当前公式取最近色,查表 O(1));格内边界偏差 ≤4/255,相对色板间距可忽略。
+function ensurePalLab() {
+  if (palLab) return;
+  palLab = new Float64Array(256 * 3);
+  palLab.fill(NaN);
+  for (let i = 0; i < 256; i++) {
+    const c = palette[i];
+    if (c == null || transparentSlot[i]) continue;
+    const lab = rgb2lab((c >> 16) & 255, (c >> 8) & 255, c & 255);
+    palLab[i * 3] = lab[0]; palLab[i * 3 + 1] = lab[1]; palLab[i * 3 + 2] = lab[2];
+  }
+}
+function rgb2lab(r8, g8, b8) {
+  let r = r8 / 255, g = g8 / 255, b = b8 / 255;
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+  const X = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
+  const Y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
+  const Z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883;
+  const f = t => t > 0.008856451679 ? Math.cbrt(t) : t / (3 * 0.1284185493 * 0.1284185493) + 4 / 29;
+  const fy = f(Y), fx = f(X), fz = f(Z);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function dE2000(l1, a1, b1, l2, a2, b2) {
+  const c1 = Math.hypot(a1, b1), c2 = Math.hypot(a2, b2);
+  const cbar = (c1 + c2) / 2;
+  const cb7 = Math.pow(cbar, 7);
+  const g = 0.5 * (1 - Math.sqrt(cb7 / (cb7 + Math.pow(25, 7))));
+  const a1p = a1 * (1 + g), a2p = a2 * (1 + g);
+  const c1p = Math.hypot(a1p, b1), c2p = Math.hypot(a2p, b2);
+  const at1 = Math.atan2(b1, a1p), at2 = Math.atan2(b2, a2p);
+  const h1p = at1 * 180 / Math.PI + (at1 < 0 ? 360 : 0);
+  const h2p = at2 * 180 / Math.PI + (at2 < 0 ? 360 : 0);
+  const dlp = l2 - l1, dcp = c2p - c1p;
+  let dhp;
+  if (c1p * c2p === 0) dhp = 0;
+  else {
+    let d = h2p - h1p;
+    if (d > 180) d -= 360;
+    else if (d < -180) d += 360;
+    dhp = 2 * Math.sqrt(c1p * c2p) * Math.sin(d * Math.PI / 360);
+  }
+  const lb = (l1 + l2) / 2, cb = (c1p + c2p) / 2;
+  let hb;
+  if (c1p * c2p === 0) hb = h1p + h2p;
+  else if (Math.abs(h1p - h2p) <= 180) hb = (h1p + h2p) / 2;
+  else hb = h1p + h2p >= 360 ? (h1p + h2p - 360) / 2 : (h1p + h2p + 360) / 2;
+  const hb2 = 2 * hb * Math.PI / 180, hb4 = 4 * hb * Math.PI / 180;
+  const t = 1 - 0.17 * Math.cos((hb - 30) * Math.PI / 180) + 0.24 * Math.cos(hb2)
+    + 0.32 * Math.cos((3 * hb + 6) * Math.PI / 180) - 0.20 * Math.cos(hb4 - 63 * Math.PI / 180);
+  const dth = 30 * Math.exp(-Math.pow(hb - 275, 2) / 625);
+  const cbpb7 = Math.pow(cb, 7);
+  const rc = 2 * Math.sqrt(cbpb7 / (cbpb7 + Math.pow(25, 7)));
+  const d = lb - 50;
+  const sl = 1 + 0.015 * d * d / Math.sqrt(20 + d * d);
+  const sc = 1 + 0.045 * cb;
+  const sh = 1 + 0.015 * cb * t;
+  const rt = -Math.sin(2 * dth * Math.PI / 180) * rc;
+  const e1 = dlp / sl, e2 = dcp / sc, e3 = dhp / sh;
+  return Math.sqrt(e1 * e1 + e2 * e2 + e3 * e3 + rt * e2 * e3);
+}
+function dE94(l1, a1, b1, l2, a2, b2) {   // 图形艺术参数:kL=1, K1=0.045, K2=0.015
+  const c1 = Math.hypot(a1, b1), c2 = Math.hypot(a2, b2);
+  const dl = l1 - l2, dc = c1 - c2;
+  const da = a1 - a2, db = b1 - b2;
+  let dh2 = da * da + db * db - dc * dc;
+  if (dh2 < 0) dh2 = 0;
+  const s1 = 1 + 0.045 * c1, s2 = 1 + 0.015 * c1;
+  return Math.sqrt(dl * dl + dc * dc / (s1 * s1) + dh2 / (s2 * s2));
+}
+function lutBuildRange(buf, s0, s1) {
+  const use2000 = distMode === "ciede2000";
+  for (let s = s0; s < s1; s++) {
+    const r = ((s >> 10) << 3) + 4, g = (((s >> 5) & 31) << 3) + 4, b = ((s & 31) << 3) + 4;
+    const lab = rgb2lab(r, g, b);
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < 256; i++) {
+      const x = i * 3;
+      if (isNaN(palLab[x])) continue;  // 无效槽(透明等)
+      const d = use2000
+        ? dE2000(lab[0], lab[1], lab[2], palLab[x], palLab[x + 1], palLab[x + 2])
+        : dE94(lab[0], lab[1], lab[2], palLab[x], palLab[x + 1], palLab[x + 2]);
+      if (d < bestD) { bestD = d; best = i - 128; }
+    }
+    buf[s] = best;
+  }
+}
+function ensureLut() {   // 同步兜底:表缺失或公式不符则按当前公式重建
+  if (lutReady === 2 && lutFormula === distMode) return;
+  buildLutSync();
+}
+function buildLutSync() {
+  ensurePalLab();
+  lutBuf = lutBuf || new Int8Array(1 << 15);
+  lutBuildRange(lutBuf, 0, 1 << 15);
+  lutFormula = distMode;
+  lutReady = 2;
+}
+function kickLutBuild() {   // 后台分批构建,不阻塞 UI;调用方轮询 lutReady/lutFormula 等就绪
+  if (lutReady === 2 && lutFormula === distMode) return;
+  if (lutReady === 1 && lutBuilding === distMode) return;
+  ensurePalLab();           // 首建表前必须已就绪 Lab(此前可能从未构建)
+  const ep = lutEpoch, fml = distMode;
+  lutReady = 1;
+  lutBuilding = fml;
+  const buf = new Int8Array(1 << 15);
+  let s = 0;
+  const step = () => {
+    if (ep !== lutEpoch || distMode !== fml) {  // 调色板重载或公式切换 → 中止(由新 kick 重建)
+      if (lutReady === 1 && lutBuilding === fml) lutReady = 0;
+      return;
+    }
+    const t0 = performance.now();
+    while (s < 32768 && performance.now() - t0 < 30) {
+      lutBuildRange(buf, s, Math.min(s + 128, 32768));
+      s += 128;
+    }
+    if (s >= 32768) {
+      lutBuf = buf;
+      lutFormula = fml;
+      lutReady = 2;
+      return;
+    }
+    setTimeout(step, 0);
+  };
+  step();
+}
+
+// ===== 目录树 =====
+function findNode(path) {  // 任意节点(文件夹或画);树根返回 tree
+  let node = tree;
+  let list = tree.children;
+  for (const seg of (path || "").split("/")) {
+    if (!seg) continue;
+    const c = list.find(n => n.name === seg);
+    if (!c) return null;
+    node = c;
+    if (c.type !== "folder") return c;
+    list = c.children;
+  }
+  return node;
+}
+
+function folderNode(path) {
+  const n = findNode(path);
+  return n === tree ? tree : (n && n.type === "folder" ? n : null);
+}
+
+function renderTree() {
+  syncPathText();
+  const pane = $("treePane");
+  pane.innerHTML = "";
+
+  // 顶部双按钮:根目录(定位,与目录行选中互斥)+ 新建文件夹(作用于当前浏览目录)
+  const bar = document.createElement("div");
+  bar.className = "trootbar";
+  const rb = document.createElement("button");
+  rb.className = "btn rootbtn" + (curDir === "" ? " sel" : "");
+  rb.title = "回到根目录";
+  rb.append(ic("folder"));
+  const rbTxt = document.createElement("span");
+  rbTxt.textContent = "根目录";
+  rb.append(rbTxt);
+  rb.onclick = () => openDir("");
+  const ab = document.createElement("button");
+  ab.className = "btn primary";
+  ab.title = "在当前浏览目录下新建文件夹";
+  ab.append(ic("plus"));
+  const abTxt = document.createElement("span");
+  abTxt.textContent = "新建文件夹";
+  ab.append(abTxt);
+  ab.onclick = openFolderDialog;
+  bar.append(rb, ab);
+  pane.append(bar);
+
+  tree.children.forEach(n => {
+    if (n.type === "folder") appendFolder(pane, n, "", 0);
+  });
+}
+
+const collapsed = new Set();
+
+function appendFolder(container, n, prefix, depth) {
+  const path = prefix + n.name;
+  const row = document.createElement("div");
+  row.className = "tn" + (curDir === path ? " sel" : "");
+  row.style.paddingLeft = (10 + depth * 16) + "px";
+
+  const hasKids = n.children.some(c => c.type === "folder");
+  const open = !collapsed.has(path);
+  const chev = document.createElement("span");
+  if (hasKids) {
+    chev.className = "chev" + (open ? " open" : "");
+    chev.append(ic("chev"));
+    chev.title = open ? "折叠" : "展开";
+    chev.onclick = ev => {
+      ev.stopPropagation();
+      if (collapsed.has(path)) collapsed.delete(path);
+      else collapsed.add(path);
+      renderTree();
+    };
+  } else {
+    chev.className = "chev leaf";  // 无子目录:隐藏占位(保留宽度),图标列与兄弟行对齐
+    chev.setAttribute("aria-hidden", "true");
+  }
+  row.append(chev);
+  row.append(ic("folder"));
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = n.name;
+  row.append(nm);
+  const ren = document.createElement("span");
+  ren.className = "ren";
+  ren.append(ic("rename"));
+  ren.title = "重命名 " + path;
+  ren.onclick = ev => {
+    ev.stopPropagation();
+    openRenameModal(path, n);
+  };
+  row.append(ren);
+  const del = document.createElement("span");
+  del.className = "del";
+  del.textContent = "✕";
+  del.title = "删除 " + path;
+  del.onclick = ev => {
+    ev.stopPropagation();
+    confirmDelete(path, n);
+  };
+  row.append(del);
+  row.onclick = () => openDir(path);
+  container.append(row);
+
+  if (open) {
+    n.children.forEach(c => {
+      if (c.type === "folder") appendFolder(container, c, path + "/", depth + 1);
+    });
+  }
+}
+
+// ===== 导航 / 目录切换 =====
+function openDir(path) {
+  if (path === curDir) return;
+  curDir = path;
+  sel = null;
+  renderDetailHint();
+  renderTree();
+  renderCards();
+}
+
+async function refreshAll() {
+  tree = await api("/api/tree");
+  renderTree();
+  renderCards();
+  if (!sel) {
+    renderDetailHint();
+  } else if (!findNode(sel.path)) {
+    sel = null;
+    renderDetailHint();
+  }
+}
+
+// ===== 中栏:画卡片 =====
+function renderCards() {
+  cardsEpoch++;
+  const mine = cardsEpoch;
+  const folder = folderNode(curDir);
+  const cardsEl = $("cards");
+  cardsEl.innerHTML = "";
+  if (!folder) {
+    const box = document.createElement("div");
+    box.className = "emptybox";
+    const p1 = document.createElement("p");
+    p1.textContent = "此目录已不存在";
+    box.append(p1);
+    cardsEl.append(box);
+    return;
+  }
+  const paints = folder.children.filter(c => c.type === "painting");
+  if (paints.length === 0) {
+    const box = document.createElement("div");
+    box.className = "emptybox";
+    const si = document.createElement("span");
+    si.innerHTML = IC.hint;
+    box.append(si);
+    const p1 = document.createElement("p");
+    p1.textContent = curDir === "" ? "还没有地图画" : "此目录还没有地图画";
+    const p2 = document.createElement("p");
+    p2.style.fontSize = "12px";
+    p2.textContent = "点击右上「新建地图画」开始";
+    box.append(p1, p2);
+    cardsEl.append(box);
+  }
+  for (const p of paints) {
+    const path = curDir ? curDir + "/" + p.name : p.name;
+    const card = document.createElement("div");
+    card.className = "card" + (sel && sel.path === path ? " sel" : "");
+    card.dataset.path = path;
+    card.title = path;
+
+    const tm = document.createElement("div");
+    tm.className = "thumb";
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = p.cols + "×" + p.rows;
+    tm.append(badge);
+    const im = new Image();
+    im.alt = "";
+    im.decoding = "async";
+    tm.append(im);
+    const name = document.createElement("div");
+    name.className = "cname";
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = p.name;
+    nm.title = path;
+    const cren = document.createElement("button");
+    cren.className = "cren";
+    cren.append(ic("rename"));
+    cren.title = "重命名 " + path;
+    cren.onclick = ev => {
+      ev.stopPropagation();
+      openRenameModal(path, { type: "painting", name: p.name, cols: p.cols, rows: p.rows });
+    };
+    const cdel = document.createElement("button");
+    cdel.className = "cdel";
+    cdel.textContent = "✕";
+    cdel.title = "删除 " + path;
+    cdel.onclick = ev => {
+      ev.stopPropagation();
+      confirmDelete(path, { type: "painting", cols: p.cols, rows: p.rows });
+    };
+    name.append(nm, cren, cdel);
+    card.append(tm, name);
+    cardsEl.append(card);
+
+    loadThumb(path, im, mine);
+  }
+}
+
+function loadThumb(path, im, mine) {
+  api("/api/thumb?path=" + encodeURIComponent(path)).then(r => {
+    if (mine !== cardsEpoch) return;
+    im.src = r.img;
+    im.onload = () => im.classList.add("ready");
+  }).catch(() => {
+    if (mine !== cardsEpoch) return;
+    im.remove();
+  });
+}
+
+$("cards").addEventListener("click", ev => {
+  const card = ev.target.closest(".card");
+  if (card) selectPaint(card.dataset.path);
+});
+
+// ===== 右栏:预览与操作 =====
+function renderDetailHint() {
+  const d = $("detailPane");
+  d.innerHTML = "";
+  const h = document.createElement("div");
+  h.className = "dhint";
+  const s = document.createElement("span");
+  s.innerHTML = IC.hint;
+  const p1 = document.createElement("p");
+  p1.textContent = "在左侧选择一幅地图画";
+  const p2 = document.createElement("p");
+  p2.style.fontSize = "12px";
+  p2.textContent = "此处查看预览并复制获取 / 部署指令";
+  h.append(s, p1, p2);
+  d.append(h);
+}
+
+async function selectPaint(path) {
+  if (sel && sel.path === path) return;
+  let p;
+  try {
+    p = await api("/api/painting?path=" + encodeURIComponent(path));
+  } catch (e) {
+    if (!/401/.test(e.message)) toast("加载失败: " + e.message, true);
+    return;
+  }
+  const i = path.lastIndexOf("/");
+  const dir = i <= 0 ? "" : path.substring(0, i);
+  const dirChanged = dir !== curDir;
+  if (dirChanged) {
+    curDir = dir;
+  }
+  sel = { path, name: p.name, cols: p.cols, rows: p.rows };
+  renderTree();
+  if (dirChanged) {
+    renderCards();
+  } else {
+    syncCardSel();
+  }
+  renderDetail(p);
+}
+
+function syncCardSel() {
+  const cur = sel ? sel.path : null;
+  document.querySelectorAll("#cards .card").forEach(c =>
+      c.classList.toggle("sel", !!cur && cur === c.dataset.path));
+}
+
+function renderDetail(p) {
+  const d = $("detailPane");
+  d.innerHTML = "";
+  const body = document.createElement("div");
+  body.className = "dbody";
+
+  const name = document.createElement("div");
+  name.className = "dname";
+  name.textContent = p.name;
+  const pathEl = document.createElement("div");
+  pathEl.className = "dpath";
+  pathEl.textContent = sel.path;
+  pathEl.title = sel.path;
+  const meta = document.createElement("div");
+  meta.className = "dmeta";
+  const c1 = document.createElement("span");
+  c1.className = "chip";
+  c1.textContent = p.cols + " × " + p.rows;
+  const c2 = document.createElement("span");
+  c2.className = "chip";
+  c2.textContent = p.cols * p.rows + " 张";
+  meta.append(c1, c2);
+  body.append(name, pathEl, meta);
+
+  const view = document.createElement("div");
+  view.className = "dview";
+  const loading = document.createElement("div");
+  loading.className = "loading";
+  loading.textContent = "生成预览…";
+  view.append(loading);
+  body.append(view);
+
+  const btns = document.createElement("div");
+  btns.className = "dbtns";
+  const bDeploy = document.createElement("button");
+  bDeploy.className = "btn primary wide";
+  bDeploy.textContent = "复制部署指令";
+  bDeploy.title = "/mapedit deploy " + sel.path;
+  const bGive = document.createElement("button");
+  bGive.className = "btn wide";
+  bGive.textContent = "复制获取指令";
+  bGive.title = "/mapedit give " + sel.path;
+  const bReplace = document.createElement("button");
+  bReplace.className = "btn wide";
+  bReplace.textContent = "替换图片";
+  const bDownload = document.createElement("button");
+  bDownload.className = "btn wide";
+  bDownload.textContent = "下载图片";
+  bDownload.title = "将当前预览导出为 PNG";
+  const bRename = document.createElement("button");
+  bRename.className = "btn wide";
+  bRename.textContent = "重命名地图画";
+  const bDel = document.createElement("button");
+  bDel.className = "btn danger wide";
+  bDel.textContent = "删除地图画";
+  btnWithIcon(bDeploy, "copy");
+  btnWithIcon(bGive, "copy");
+  btnWithIcon(bReplace, "upload");
+  btnWithIcon(bDownload, "download");
+  btnWithIcon(bRename, "rename");
+  btnWithIcon(bDel, "trash");
+  btns.append(bDeploy, bGive, bReplace, bDownload, bRename, bDel);
+  body.append(btns);
+  d.append(body);
+
+  // 预览(异步渲染到 canvas;detailCanvas 供下载使用)
+  detailCanvas = null;
+  setTimeout(() => {
+    const cv = document.createElement("canvas");
+    try {
+      drawPainting(cv, p.cols, p.rows, p.tiles || []);
+      view.innerHTML = "";
+      view.append(cv);
+      detailCanvas = cv;
+    } catch (e) {
+      view.innerHTML = "";
+      view.textContent = "预览失败: " + e.message;
+    }
+  }, 20);
+
+  bDeploy.onclick = () => copyText("/mapedit deploy " + sel.path, () => {
+    bDeploy.textContent = "已复制";
+    setTimeout(() => { bDeploy.textContent = "复制部署指令"; }, 1600);
+  });
+  bGive.onclick = () => copyText("/mapedit give " + sel.path, () => {
+    bGive.textContent = "已复制";
+    setTimeout(() => { bGive.textContent = "复制获取指令"; }, 1600);
+  });
+  bReplace.onclick = () => openReplace();
+  bDownload.onclick = () => {
+    if (!detailCanvas) {
+      toast("预览尚未生成,请稍候", true);
+      return;
+    }
+    const a = document.createElement("a");
+    a.download = (p.name || "painting") + ".png";
+    a.href = detailCanvas.toDataURL("image/png");
+    a.click();
+    toast("已下载 " + a.download);
+  };
+  bRename.onclick = () => openRenameModal(sel.path, { type: "painting", name: sel.name });
+  bDel.onclick = () => confirmDelete(sel.path, { type: "painting", cols: p.cols, rows: p.rows });
+}
+
+let detailCanvas = null;
+
+function drawPainting(cv, cols, rows, tiles) {
+  const W = cols * 128, H = rows * 128;
+  cv.width = W;
+  cv.height = H;
+  cv.className = "chessbg";  // 棋盘作为 CSS 背景,透明像素透出
+  const ctx = cv.getContext("2d");
+  if (!tiles || tiles.length !== cols * rows) return;
+  const id = ctx.createImageData(W, H);
+  const data = id.data;
+  for (let i = 0; i < tiles.length; i++) {
+    const bytes = Uint8Array.from(atob(tiles[i]), c => c.charCodeAt(0));
+    const bx = (i % cols) * 128;
+    const by = Math.floor(i / cols) * 128;
+    for (let y = 0; y < 128; y++) {
+      const rowBase = ((by + y) * W + bx) * 4;
+      const br = y * 128;
+      for (let x = 0; x < 128; x++) {
+        const b = bytes[br + x];
+        const s = b >= 128 ? b - 256 : b;
+        const idx = s + 128;
+        const o = rowBase + x * 4;
+        if (transparentSlot[idx]) {
+          data[o + 3] = 0;
+        } else {
+          const c = palette[idx];
+          if (c == null) {
+            data[o] = 255; data[o + 1] = 0; data[o + 2] = 255; data[o + 3] = 255;
+          } else {
+            data[o] = (c >> 16) & 255;
+            data[o + 1] = (c >> 8) & 255;
+            data[o + 2] = c & 255;
+            data[o + 3] = 255;
+          }
+        }
+      }
+    }
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+// ===== 删除 =====
+function countTree(n, acc) {
+  if (n.type === "painting") {
+    acc.paints++;
+    acc.maps += (n.cols || 0) * (n.rows || 0);
+  } else {
+    acc.folders++;
+    (n.children || []).forEach(c => countTree(c, acc));
+  }
+}
+
+function confirmDelete(path, node) {
+  let title;
+  let text;
+  if (node.type === "folder") {
+    const acc = { folders: 0, paints: 0, maps: 0 };
+    (node.children || []).forEach(c => countTree(c, acc));
+    const parts = [];
+    if (acc.folders > 0) parts.push(acc.folders + " 个子文件夹");
+    if (acc.paints > 0) parts.push(acc.paints + " 幅地图画(共 " + acc.maps + " 张地图)");
+    title = "删除文件夹";
+    text = "将删除文件夹 <b>" + esc(path) + "</b>"
+        + (parts.length ? " 及其中全部内容（" + parts.join("、") + "）" : "")
+        + "。<br>删除后不可恢复。";
+  } else {
+    title = "删除地图画";
+    text = "将删除地图画 <b>" + esc(path) + "</b>（共 "
+        + (node.cols || 0) * (node.rows || 0) + " 张地图）。<br>"
+        + "已经放上墙或收在背包里的地图不受影响；删除后不可恢复。";
+  }
+  showDialog(title, text, {
+    okText: "删除",
+    danger: true,
+    onOk: () => api("/api/node?path=" + encodeURIComponent(path), { method: "DELETE" }).then(() => {
+      toast("已删除 " + path);
+      if (node.type === "folder" && curDir && (curDir === path || curDir.startsWith(path + "/"))) {
+        curDir = "";
+        sel = null;
+      } else if (sel && sel.path === path) {
+        sel = null;
+      }
+      refreshAll();
+    }).catch(e => toast("删除失败: " + e.message, true))
+  });
+}
+
+// ===== 新建文件夹 =====
+function openFolderDialog() {
+  $("folderParent").textContent = curDir === "" ? "根目录" : curDir;
+  $("folderName").value = "";
+  $("folderOv").style.display = "flex";
+  setTimeout(() => $("folderName").focus(), 30);
+}
+function closeFolderDialog() {
+  $("folderOv").style.display = "none";
+}
+$("folderClose").appendChild(ic("x"));
+$("folderClose").onclick = closeFolderDialog;
+$("folderCancel").onclick = closeFolderDialog;
+$("folderOk").onclick = () => {
+  const name = $("folderName").value.trim();
+  if (!name) { $("folderName").focus(); return; }
+  api("/api/folder", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ parent: curDir, name })
+  }).then(() => {
+    closeFolderDialog();
+    toast("已创建文件夹 " + (curDir ? curDir + "/" : "") + name + "/");
+    refreshAll();
+  }).catch(e => toast("创建失败: " + e.message, true));
+};
+$("folderName").addEventListener("keydown", e => { if (e.key === "Enter") $("folderOk").click(); });
+
+// ===== 重命名(文件夹 / 地图画共用) =====
+let renameCtx = null;   // {path, name, isFolder}
+function openRenameModal(path, node) {
+  if (!node) return;
+  renameCtx = { path, name: node.name, isFolder: node.type === "folder" };
+  const i = path.lastIndexOf("/");
+  const parent = i <= 0 ? "" : path.substring(0, i);
+  $("renameAt").textContent = "位置: " + (parent === "" ? "根目录" : parent);
+  $("renameName").value = node.name;
+  $("renameOv").style.display = "flex";
+  setTimeout(() => {
+    $("renameName").focus();
+    $("renameName").select();
+  }, 30);
+}
+function closeRenameModal() {
+  $("renameOv").style.display = "none";
+  renameCtx = null;
+}
+$("renameClose").appendChild(ic("x"));
+$("renameClose").onclick = closeRenameModal;
+$("renameCancel").onclick = closeRenameModal;
+$("renameOk").onclick = () => {
+  const ctx = renameCtx;
+  if (!ctx) return;
+  const name = $("renameName").value.trim();
+  if (!name) { $("renameName").focus(); return; }
+  if (name === ctx.name) { closeRenameModal(); return; }
+  api("/api/rename", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: ctx.path, name })
+  }).then(r => {
+    closeRenameModal();
+    remapAfterRename(ctx, r.path, name);   // 重映射浏览目录/选中路径 → 旧路径失效
+    toast("已重命名");
+  }).catch(e => toast("重命名失败: " + e.message, true));
+};
+$("renameName").addEventListener("keydown", e => { if (e.key === "Enter") $("renameOk").click(); });
+function remapAfterRename(ctx, newPath, newName) {
+  const oldPath = ctx.path;
+  const shift = p => {
+    if (p === oldPath) return newPath;
+    if (p.startsWith(oldPath + "/")) return newPath + p.slice(oldPath.length);
+    return p;
+  };
+  curDir = shift(curDir);
+  if (sel) {
+    sel.path = shift(sel.path);
+    if (sel.path === newPath) sel.name = newName;
+  }
+  refreshAll().then(() => {
+    if (!sel) return;
+    // 右栏标题/路径同步(内容未变,不必重载预览)
+    const dn = document.querySelector("#detailPane .dname");
+    if (dn) dn.textContent = sel.name;
+    const dp = document.querySelector("#detailPane .dpath");
+    if (dp) { dp.textContent = sel.path; dp.title = sel.path; }
+  });
+}
+
+// ===== 新建 / 替换弹窗 =====
+let crop = null;    // 裁剪框在源图上的矩形 {sx,sy,sw,sh};比例 = 输出网格比
+let offCv = null;   // 离屏输出画布(cols×rows × 128,量化预览与切片共用)
+const MIN_CROP_SW = 8;
+
+function setOffSize() {
+  if (!offCv) {
+    offCv = document.createElement("canvas");
+    offCv.getContext("2d", { willReadFrequently: true });   // 高频 getImageData 读回,首建上下文带此属性
+  }
+  offCv.width = (+$("fCols").value || 1) * 128;
+  offCv.height = (+$("fRows").value || 1) * 128;
+}
+
+function resetCrop() {   // 默认裁剪框:在图上尽量最大且居中(保持网格比例)
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const ratio = offCv.width / offCv.height;
+  const sw = Math.min(iw, ih * ratio);
+  crop = { sx: (iw - sw) / 2, sy: (ih - sw / ratio) / 2, sw, sh: sw / ratio };
+}
+
+function clampCrop() {   // 裁剪框限制在源图内(不可超出),比例与尺寸下限
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const ratio = offCv.width / offCv.height;
+  crop.sw = Math.min(Math.max(crop.sw, MIN_CROP_SW), Math.min(iw, ih * ratio));
+  crop.sh = crop.sw / ratio;
+  crop.sx = Math.min(Math.max(crop.sx, 0), iw - crop.sw);
+  crop.sy = Math.min(Math.max(crop.sy, 0), ih - crop.sh);
+}
+
+// ===== 预览区几何:整图固定展示(contain),裁剪框叠加其上 =====
+function fitRect() {   // 源图完整显示在画布上的目标矩形
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const cw = $("cv").width, ch = $("cv").height;
+  const s = Math.min(cw / iw, ch / ih);
+  const w = iw * s, h = ih * s;
+  return { x: (cw - w) / 2, y: (ch - h) / 2, w, h, s };
+}
+
+function boxRect() {   // 裁剪框在画布上的显示矩形
+  const f = fitRect();
+  return { x: f.x + crop.sx * f.s, y: f.y + crop.sy * f.s, w: crop.sw * f.s, h: crop.sh * f.s };
+}
+
+// ===== 重绘:图不动,框动 =====
+function redrawCanvas(withDecor, withQuant) {
+  const cv = $("cv");
+  const ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!img) return;
+  const f = fitRect();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(img, f.x, f.y, f.w, f.h);
+  if (withQuant && $("fQuant").checked) {
+    if (pvSnapEq(pvSnap, pvCurSnap())) pvDrawCache();                       // 缓存仍匹配:直接贴
+    else if (!pvJob || !pvSnapEq(pvJob.snap, pvCurSnap())) pvSchedule();    // 需渲染且无同几何任务:自动开渲
+  }
+  if (withDecor) drawDecor();
+}
+
+// ===== 量化预览:异步分块自动渲染(渐进上屏) =====
+// 勾选「预览显示量化效果」后,几何/参数一变即自动渲染;分块推进不冻结 UI。
+// 已量化的行逐块刷入画面(上为量化、下未轮到仍为原图),量化过程直接可见;
+// 渲染中任何变化(pvInvalidate)都中止并重来。
+// offCv = 离屏输出画布,渲染完成时其内容即结果缓存;pvSnap 记录它对应的快照。
+let pvSnap = null;
+let pvJob = null;   // 在途任务 {tok, snap, qj}
+let pvTok = 0;      // 中止令牌(递增即停)
+function pvCurSnap() {
+  return {
+    sx: crop.sx, sy: crop.sy, sw: crop.sw, sh: crop.sh,
+    cols: +$("fCols").value || 1, rows: +$("fRows").value || 1,
+    mode: $("fQuantMode").value, formula: distMode,
+  };
+}
+function pvSnapEq(a, b) {
+  return !!a && !!b && a.sx === b.sx && a.sy === b.sy && a.sw === b.sw && a.sh === b.sh
+    && a.cols === b.cols && a.rows === b.rows && a.mode === b.mode && a.formula === b.formula;
+}
+function pvDrawCache() {   // 把渲染结果(offCv)按当前裁剪框贴回主画布
+  if (!img || !pvSnapEq(pvSnap, pvCurSnap())) return;
+  const b = boxRect();
+  if (b.w < 1 || b.h < 1) return;
+  const ctx = $("cv").getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(offCv, b.x, b.y, b.w, b.h);
+}
+function pvBlitProgress(jb) {   // 渲染中渐进上屏:整幅重画(原图 → 已量化行),遮罩只画一层防叠加变黑
+  const q = jb.qj;
+  if (q.y < 1) return;
+  const b = boxRect();
+  if (b.w < 1 || b.h < 1) return;
+  const octx = offCv.getContext("2d");
+  octx.putImageData(new ImageData(q.d, q.W, q.H), 0, 0, 0, 0, q.W, q.y);
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!img) return;
+  const f = fitRect();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(img, f.x, f.y, f.w, f.h);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(offCv, b.x, b.y, b.w, b.h);
+  drawDecor();
+}
+function pvInvalidate() {  // 中止在途渲染并丢弃缓存(调用方随后重绘/重排)
+  pvTok++;
+  pvJob = null;
+  pvSnap = null;
+}
+function pvSchedule() {
+  if (!img || !$("fQuant").checked) return;
+  const snap = pvCurSnap();
+  if (pvSnapEq(pvSnap, snap)) return;
+  if (pvJob && pvSnapEq(pvJob.snap, snap)) return;   // 同几何已在渲染:等它完成
+  pvTok++;
+  const tok = pvTok;
+  pvJob = null;
+  setOffSize();
+  const octx = offCv.getContext("2d");
+  octx.clearRect(0, 0, offCv.width, offCv.height);
+  octx.drawImage(img, snap.sx, snap.sy, snap.sw, snap.sh, 0, 0, offCv.width, offCv.height);
+  const base = octx.getImageData(0, 0, offCv.width, offCv.height).data;
+  const jb = { tok, snap, qj: newQuantJob(offCv.width, offCv.height, snap.mode, base) };
+  pvJob = jb;
+  if (distMode !== "rgb") kickLutBuild();   // LUT 公式:确保最近色表在后台构建
+  pvTick(jb);
+}
+function pvTick(jb) {   // 携带自身任务推进,不会误推进后继任务
+  if (!pvJob || pvJob !== jb) return;
+  if (pvTok !== jb.tok) return;
+  if (distMode !== "rgb" && (lutReady !== 2 || lutFormula !== distMode)) {  // LUT 未就绪:等
+    setTimeout(() => pvTick(jb), 80);
+    return;
+  }
+  if (jobStep(jb.qj, 32)) {
+    if (pvTok !== jb.tok) return;
+    pvJob = null;
+    pvSnap = jb.snap;
+    offCv.getContext("2d").putImageData(new ImageData(jb.qj.out, offCv.width, offCv.height), 0, 0);
+    if (pvTok !== jb.tok || !pvSnapEq(pvSnap, pvCurSnap())) { pvSnap = null; pvSchedule(); return; }
+    pvDrawCache();          // 完成:自动贴回量化结果
+    drawDecor();
+    return;
+  }
+  pvBlitProgress(jb);       // 未完成:已量化行上屏(进度可见)
+  if (pvTok !== jb.tok) return;
+  setTimeout(() => pvTick(jb), 0);
+}
+
+function drawDecor() {   // 框外遮罩 + 框内网格线 + 边框 + 八把手
+  if (!img) return;
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  const cw = cv.width, ch = cv.height;
+  const b = boxRect();
+  ctx.fillStyle = "rgba(20,26,35,.45)";
+  ctx.fillRect(0, 0, cw, b.y);
+  ctx.fillRect(0, b.y + b.h, cw, ch - b.y - b.h);
+  ctx.fillRect(0, b.y, b.x, b.h);
+  ctx.fillRect(b.x + b.w, b.y, cw - b.x - b.w, b.h);
+  const cols = +$("fCols").value || 1, rows = +$("fRows").value || 1;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,.7)";
+  for (let c = 1; c < cols; c++) {
+    const x = b.x + (b.w / cols) * c;
+    ctx.beginPath(); ctx.moveTo(x, b.y); ctx.lineTo(x, b.y + b.h); ctx.stroke();
+  }
+  for (let r = 1; r < rows; r++) {
+    const y = b.y + (b.h / rows) * r;
+    ctx.beginPath(); ctx.moveTo(b.x, y); ctx.lineTo(b.x + b.w, y); ctx.stroke();
+  }
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.6;
+  ctx.strokeRect(b.x, b.y, b.w, b.h);
+  const HS = 10;
+  const pts = [
+    [b.x, b.y], [b.x + b.w / 2 - HS / 2, b.y], [b.x + b.w - HS, b.y],
+    [b.x, b.y + b.h / 2 - HS / 2], [b.x + b.w - HS, b.y + b.h / 2 - HS / 2],
+    [b.x, b.y + b.h - HS], [b.x + b.w / 2 - HS / 2, b.y + b.h - HS], [b.x + b.w - HS, b.y + b.h - HS],
+  ];
+  for (const [x, y] of pts) {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(x, y, HS, HS);
+    ctx.strokeStyle = "#2f6fed";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + .5, y + .5, HS - 1, HS - 1);
+  }
+}
+
+// ===== 拖拽:只移动/缩放裁剪框 =====
+const CURSORS = {
+  nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize",
+  n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", move: "grab",
+};
+function handleAt(x, y) {   // 把手名 / "move"(框内平移)/ null(框外)
+  if (!img) return null;
+  const b = boxRect();
+  if (x < b.x - 12 || x > b.x + b.w + 12 || y < b.y - 12 || y > b.y + b.h + 12) return null;
+  const HS = 12;
+  const cand = [
+    ["nw", b.x, b.y], ["ne", b.x + b.w - HS, b.y],
+    ["sw", b.x, b.y + b.h - HS], ["se", b.x + b.w - HS, b.y + b.h - HS],
+    ["n", b.x + b.w / 2 - HS / 2, b.y], ["s", b.x + b.w / 2 - HS / 2, b.y + b.h - HS],
+    ["w", b.x, b.y + b.h / 2 - HS / 2], ["e", b.x + b.w - HS, b.y + b.h / 2 - HS / 2],
+  ];
+  for (const [name, hx, hy] of cand) {
+    if (x >= hx && x <= hx + HS && y >= hy && y <= hy + HS) return name;
+  }
+  // 整条边框都可拉伸(把边带映射到该边中点把手),防止"拉不动却变成平移"
+  const T = 6;
+  if (x >= b.x - T && x <= b.x + T) return "w";
+  if (x >= b.x + b.w - T && x <= b.x + b.w + T) return "e";
+  if (y >= b.y - T && y <= b.y + T) return "n";
+  if (y >= b.y + b.h - T && y <= b.y + b.h + T) return "s";
+  if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) return "move";
+  return null;
+}
+
+let cropDrag = null;
+function canvasXY(e) {   // 画布内部坐标(支持 CSS 缩放)
+  const cv = $("cv");
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height];
+}
+
+function cvPointerDown(e) {
+  if (!img || e.button !== 0) return;
+  e.preventDefault();
+  const [x, y] = canvasXY(e);
+  const h = handleAt(x, y);
+  if (!h) return;
+  const b = boxRect();
+  cropDrag = {
+    h,
+    k: crop.sw / b.w,   // 显示像素 → 源图坐标
+    sx0: crop.sx, sy0: crop.sy, sw0: crop.sw,
+    ox: x, oy: y,
+  };
+  $("cv").setPointerCapture(e.pointerId);
+  $("cv").style.cursor = h === "move" ? "grabbing" : CURSORS[h];
+  pvInvalidate();                 // 拖动改变几何:停止渲染并丢弃旧预览
+  redrawCanvas(true, false);
+}
+
+function cvPointerMove(e) {
+  const cv = $("cv");
+  if (!cropDrag) {
+    if (img) {
+      const [x, y] = canvasXY(e);
+      cv.style.cursor = CURSORS[handleAt(x, y)] || "";
+    }
+    return;
+  }
+  const d = cropDrag;
+  const [x, y] = canvasXY(e);
+  const dxs = (x - d.ox) * d.k, dys = (y - d.oy) * d.k;   // 相对按下点(源图坐标)
+  const ratio = offCv.width / offCv.height;
+  const x2 = d.sx0 + d.sw0, y2 = d.sy0 + d.sw0 / ratio;   // 原右下(角把手锚)
+  let nx = d.sx0, ny = d.sy0, nw = d.sw0;
+  switch (d.h) {
+    case "move":
+      nx = d.sx0 + dxs;
+      ny = d.sy0 + dys;
+      break;
+    case "e": case "w": {   // 边中点:沿轴缩放,围绕矩形中心
+      nw = d.sw0 + (d.h === "e" ? dxs : -dxs);
+      const cx = d.sx0 + d.sw0 / 2, cy = d.sy0 + d.sw0 / ratio / 2;
+      nx = cx - nw / 2;
+      ny = cy - nw / ratio / 2;
+      break;
+    }
+    case "s": case "n": {
+      const nsh = d.sw0 / ratio + (d.h === "s" ? dys : -dys);
+      nw = nsh * ratio;
+      const cx = d.sx0 + d.sw0 / 2, cy = d.sy0 + d.sw0 / ratio / 2;
+      nx = cx - nw / 2;
+      ny = cy - nsh / 2;
+      break;
+    }
+    case "se":   // 锚:左上
+      nw = Math.min(x2 + dxs - d.sx0, (y2 + dys - d.sy0) * ratio);
+      break;
+    case "nw": { // 锚:右下
+      nw = Math.min(x2 - (d.sx0 + dxs), (y2 - (d.sy0 + dys)) * ratio);
+      nx = x2 - nw;
+      ny = y2 - nw / ratio;
+      break;
+    }
+    case "ne":   // 锚:左下
+      nw = Math.min(x2 + dxs - d.sx0, (y2 - (d.sy0 + dys)) * ratio);
+      ny = y2 - nw / ratio;
+      break;
+    case "sw":   // 锚:右上
+      nw = Math.min(x2 - (d.sx0 + dxs), (y2 + dys - d.sy0) * ratio);
+      nx = x2 - nw;
+      break;
+  }
+  crop.sx = nx;
+  crop.sy = ny;
+  crop.sw = nw;
+  clampCrop();
+  redrawCanvas(true, false);   // 拖动中跳过量化,保流畅
+}
+
+function cvPointerUp(e) {
+  if (!cropDrag) return;
+  cropDrag = null;
+  const cv = $("cv");
+  try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  cv.style.cursor = "";
+  redrawCanvas(true, true);    // 松手补一次量化预览
+}
+
+// ===== 弹窗控制 =====
+function openCreate() {
+  replacePath = null;
+  $("mTitle").textContent = "新建地图画";
+  $("fNameWrap").style.display = "";
+  $("fName").value = "";
+  $("fName").disabled = false;
+  $("fCols").value = 2;
+  $("fRows").value = 2;
+  $("fCols").disabled = false;
+  $("fRows").disabled = false;
+  openModal();
+}
+
+function openReplace() {
+  if (!sel) return;
+  replacePath = sel.path;
+  $("mTitle").textContent = "替换地图画图片";
+  $("fNameWrap").style.display = "";
+  $("fName").value = sel.name;
+  $("fName").disabled = true;
+  $("fCols").value = sel.cols;
+  $("fRows").value = sel.rows;
+  $("fCols").disabled = true;
+  $("fRows").disabled = true;
+  openModal();
+}
+
+function resizePreviewCanvas() {   // 画布铺满右侧区域(窗口固定,尺寸由容器决定)
+  const cv = $("cv");
+  const a = $("cropWrap");
+  const w = Math.max(4, Math.floor(a.clientWidth));
+  const h = Math.max(4, Math.floor(a.clientHeight));
+  if (cv.width !== w || cv.height !== h) {
+    cv.width = w;
+    cv.height = h;
+  }
+  redrawCanvas(true, true);
+}
+
+function openModal() {
+  submitting = false;
+  pvInvalidate();       // 重开弹窗即丢弃旧渲染
+  img = null;
+  crop = null;
+  $("fFile").value = "";
+  $("fbar").style.display = "none";
+  $("pickHint").style.display = "flex";
+  $("fParentText").textContent = "位置: " + (curDir === "" ? "根目录" : curDir);
+  setOffSize();
+  $("modalOv").style.display = "flex";
+  requestAnimationFrame(resizePreviewCanvas);
+}
+
+function closeModal() {
+  pvInvalidate();       // 取消/关闭弹窗:停止渲染
+  $("modalOv").style.display = "none";
+  img = null;
+  crop = null;
+  cropDrag = null;
+  replacePath = null;
+}
+
+// ===== 图片载入(点选 / 更换 / 拖入共用) =====
+function loadImageFile(file) {
+  if (!file || !/^image\//.test(file.type)) {
+    toast("请选择图片文件", true);
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const im = new Image();
+  im.onload = () => {
+    URL.revokeObjectURL(url);
+    pvInvalidate();       // 切换图片:停止渲染并丢弃旧预览
+    img = im;
+    resetCrop();           // 自动定位默认裁剪框:尽量最大且居中
+    $("fFileName").textContent = file.name;
+    $("fbar").style.display = "flex";
+    $("pickHint").style.display = "none";
+    redrawCanvas(true, true);
+  };
+  im.onerror = () => {
+    URL.revokeObjectURL(url);
+    toast("图片读取失败", true);
+  };
+  im.src = url;
+}
+
+function quantData(W, H, mode, src) {   // 同步整跑 = 可续跑引擎分块输出,逐字节一致
+  if (mode !== "smooth" && mode !== "maxdetail")
+    return new ImageData(Uint8ClampedArray.from(src), W, H);
+  const j = newQuantJob(W, H, mode, src);
+  while (!jobStep(j, H)) {}
+  return new ImageData(j.out, W, H);
+}
+
+// ===== 可续跑量化引擎(预览渲染按行分块;状态保留在 job,输出与整跑完全一致) =====
+// 平滑逐行独立;误差扩散各像素只把误差写向本行与下一行 → 同一数组按行段续跑即等价。
+function newQuantJob(W, H, mode, src) {
+  return { mode, W, H, src, y: 0, out: null, d: Uint8ClampedArray.from(src) };  // 就地工作数组
+}
+function smoothRows(d, W, y0, y1) {
+  for (let y = y0; y < y1; y++) {
+    const base = y * W * 4;
+    for (let x = 0; x < W; x++) {
+      const p = base + x * 4;
+      if (d[p + 3] === 0) continue;
+      const b = nearestIdx(d[p], d[p + 1], d[p + 2]);
+      const c = palette[b + 128];
+      if (c == null) continue;
+      d[p] = (c >> 16) & 255; d[p + 1] = (c >> 8) & 255; d[p + 2] = c & 255;
+    }
+  }
+}
+function fsRows(d, W, H, y0, y1) {   // Floyd–Steinberg 行段(内联展开,写入顺序与原实现一致)
+  for (let y = y0; y < y1; y++) {
+    for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * 4;
+      if (d[o + 3] === 0) continue;
+      const oldR = d[o], oldG = d[o + 1], oldB = d[o + 2];
+      const b = nearestIdx(oldR, oldG, oldB);
+      const c = palette[b + 128];
+      if (c == null) continue;
+      const nr = (c >> 16) & 255, ng = (c >> 8) & 255, nb = c & 255;
+      d[o] = nr; d[o + 1] = ng; d[o + 2] = nb; d[o + 3] = 255;
+      const er = oldR - nr, eg = oldG - ng, eb = oldB - nb;
+      if (x + 1 < W) { d[o + 4] += er * 7 / 16; d[o + 5] += eg * 7 / 16; d[o + 6] += eb * 7 / 16; }
+      if (y + 1 < H) {
+        const n = o + W * 4;
+        if (x > 0) { d[n - 4] += er * 3 / 16; d[n - 3] += eg * 3 / 16; d[n - 2] += eb * 3 / 16; }
+        d[n] += er * 5 / 16; d[n + 1] += eg * 5 / 16; d[n + 2] += eb * 5 / 16;
+        if (x + 1 < W) { d[n + 4] += er / 16; d[n + 5] += eg / 16; d[n + 6] += eb / 16; }
+      }
+    }
+  }
+}
+function jobStep(j, maxRows) {   // 推进至多 maxRows 行;返回 true = 完成
+  const W = j.W, H = j.H;
+  const y0 = j.y, y1 = Math.min(H, y0 + maxRows);
+  if (y0 < y1) {
+    if (j.mode === "smooth") smoothRows(j.d, W, y0, y1);
+    else fsRows(j.d, W, H, y0, y1);
+  }
+  j.y = y1;
+  if (y1 >= H) { j.out = j.d; return true; }
+  return false;
+}
+
+const yieldFrame = () => new Promise(r => setTimeout(r, 0));
+
+async function sliceTiles() {
+  const cols = +$("fCols").value, rows = +$("fRows").value;
+  await yieldFrame();   // 先让出:调用方已切到「正在处理...」,本帧渲染后再开始重活
+  setOffSize();
+  const octx = offCv.getContext("2d");
+  octx.clearRect(0, 0, offCv.width, offCv.height);
+  octx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, offCv.width, offCv.height);
+  const base = octx.getImageData(0, 0, offCv.width, offCv.height).data;
+  // 量化分块推进并逐块让出(大图不再长时间冻结 UI;输出与同步整跑逐字节一致)
+  const qj = newQuantJob(offCv.width, offCv.height, $("fQuantMode").value, base);
+  const stepRows = distMode === "rgb" ? 8 : 96;   // RGB 逐像素 256 扫描最慢,块更小
+  while (!jobStep(qj, stepRows)) {
+    await yieldFrame();
+  }
+  const qd = qj.out;
+  const tiles = [];
+  const total = cols * rows;
+  for (let i = 0; i < total; i++) {
+    const bytes = new Uint8Array(128 * 128);
+    const bx = (i % cols) * 128, by = Math.floor(i / cols) * 128;
+    for (let y = 0; y < 128; y++) {
+      const siBase = ((by + y) * offCv.width + bx) * 4;
+      const row = y * 128;
+      for (let x = 0; x < 128; x++) {
+        const si = siBase + x * 4;
+        if (qd[si + 3] < 128) { bytes[row + x] = 0; continue; }
+        bytes[row + x] = nearestIdx(qd[si], qd[si + 1], qd[si + 2]);
+      }
+    }
+    tiles.push(btoa(String.fromCharCode.apply(null, bytes)));
+    if (i % 8 === 7) await yieldFrame();   // 组 tile 也逐批让出
+  }
+  return { cols, rows, tiles };
+}
+
+function setSubmitBusy(busy) {   // 确定按钮灰+「正在处理...」;整窗 inert:其余控件样式不变但不可交互
+  const btn = $("fGo");
+  btn.disabled = busy;
+  btn.textContent = busy ? "正在处理..." : "确定";
+  const modal = $("modalOv").querySelector(".modal");
+  if (modal) {
+    modal.inert = busy;
+    if (busy && document.activeElement && modal.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  }
+}
+
+async function submit() {
+  if (submitting) return;
+  submitting = true;
+  pvInvalidate();       // 点击确定:停止渲染(提交走全量切片)
+  setSubmitBusy(true);  // 确定变灰「正在处理...」,整窗 inert:控件视觉不变但全部不可交互
+  try {
+    if (!img) { toast("请先选择图片", true); return; }
+    const cols = +$("fCols").value, rows = +$("fRows").value;
+    if (cols < 1 || rows < 1 || cols > 32 || rows > 32 || cols * rows > 512) {
+      toast("网格超出范围(每边 1..32,总数 ≤ 512)", true);
+      return;
+    }
+    const { tiles } = await sliceTiles();
+    if (replacePath != null) {
+      const target = replacePath;   // closeModal 会清 replacePath,先保存再刷新选中
+      await api("/api/painting/replace", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: target, cols, rows, tiles })
+      });
+      toast("已替换 " + target + ",墙上与背包中的将同步更新");
+      closeModal();
+      await refreshAll();
+      sel = null;   // 强制重载预览(内容已变)
+      return selectPaint(target);
+    }
+    const name = $("fName").value.trim();
+    if (!name) { toast("请输入名称", true); return; }
+    const r = await api("/api/painting", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parent: curDir, name, cols, rows, tiles })
+    });
+    toast("已创建 " + r.path);
+    closeModal();
+    await refreshAll();
+    return selectPaint(r.path);
+  } catch (e) {
+    toast((replacePath ? "替换失败: " : "创建失败: ") + e.message, true);
+  } finally {
+    submitting = false;
+    setSubmitBusy(false);
+  }
+}
+
+// ===== 弹窗事件(空白点击无事件;关闭走叉或取消/确定) =====
+$("mClose").onclick = closeModal;
+$("mClose").appendChild(ic("x"));
+$("fCancel").onclick = closeModal;
+$("fGo").onclick = submit;
+
+$("btnNewPaint").textContent = "新建地图画";
+btnWithIcon($("btnNewPaint"), "plus");
+$("btnNewPaint").onclick = openCreate;
+
+// 点选 / 更换 / 拖入
+$("fFile").onchange = () => {
+  const f = $("fFile").files[0];
+  $("fFile").value = "";   // 允许再次选择同一文件
+  if (f) loadImageFile(f);
+};
+$("pickHint").onclick = () => $("fFile").click();
+$("fPickBtn").textContent = "更换";
+btnWithIcon($("fPickBtn"), "upload");
+$("fPickBtn").onclick = () => $("fFile").click();
+const mPrevEl = $("mPrev");
+mPrevEl.addEventListener("dragover", e => {
+  e.preventDefault();
+  mPrevEl.classList.add("dragover");
+});
+mPrevEl.addEventListener("dragleave", () => mPrevEl.classList.remove("dragover"));
+mPrevEl.addEventListener("drop", e => {
+  e.preventDefault();
+  mPrevEl.classList.remove("dragover");
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadImageFile(f);
+});
+
+// 网格变化 → 重置输出画布与默认裁剪框(缓存失效并停止渲染)
+["fCols", "fRows"].forEach(id => $(id).addEventListener("input", () => {
+  pvInvalidate();
+  setOffSize();
+  if (img) resetCrop();
+  redrawCanvas(true, true);
+}));
+$("fQuant").addEventListener("input", () => {
+  if (!$("fQuant").checked) pvInvalidate();   // 取消预览:中止在途渲染(缓存保留,重勾即现)
+  redrawCanvas(true, true);
+});
+// 切换量化方式/色差公式 = 切换渲染模式 → 一律停止在途渲染并失效缓存
+$("fQuantMode").addEventListener("change", () => {
+  pvInvalidate();
+  redrawCanvas(true, true);
+});
+$("fDistMode").addEventListener("change", () => {
+  distMode = $("fDistMode").value;
+  pvInvalidate();                                       // 切换公式即停止渲染并失效缓存
+  if (distMode !== "rgb") kickLutBuild();               // LUT 公式:后台预建最近色表
+  redrawCanvas(true, true);
+});
+// 画布像素尺寸恒等于容器 CSS 尺寸(防 CSS 拉伸压扁图片/裁剪框)
+new ResizeObserver(() => resizePreviewCanvas()).observe($("cropWrap"));
+
+// 裁剪矩形交互
+const cvEl = $("cv");
+cvEl.addEventListener("pointerdown", cvPointerDown);
+cvEl.addEventListener("pointermove", cvPointerMove);
+cvEl.addEventListener("pointerup", cvPointerUp);
+cvEl.addEventListener("pointercancel", cvPointerUp);
+cvEl.addEventListener("pointerleave", () => { if (!cropDrag) cvEl.style.cursor = ""; });
+
+function syncPathText() {
+  const pt = $("pathText");
+  pt.innerHTML = "";
+  if (curDir === "") {
+    const t = document.createElement("span");
+    t.textContent = "根目录";
+    pt.append(t);
+    return;
+  }
+  const segs = curDir.split("/");
+  segs.forEach((seg, i) => {
+    if (i > 0) {
+      const s = document.createElement("span");
+      s.className = "crumb";
+      s.textContent = " / ";
+      pt.append(s);
+    }
+    const t = document.createElement("span");
+    t.textContent = seg;
+    pt.append(t);
+  });
+}
+
+// ===== 心跳续期(10 分钟 TTL,5 分钟一续) =====
+setInterval(async () => {
+  try {
+    const r = await fetch("/api/renew?token=" + encodeURIComponent(TOKEN), { method: "POST" });
+    if (!r.ok) showSessionExpired();
+  } catch (e) { /* 离线容忍 */ }
+}, 300000);
+
+// ===== 启动 =====
+(async function boot() {
+  if (!TOKEN) {
+    // URL 里没有访问链接:直接显示引导遮罩,不空打 API
+    showSessionExpired();
+    return;
+  }
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await loadPalette();
+      break;
+    } catch (e) {
+      if (attempt >= 2) { toast("调色板加载失败: " + e.message, true); return; }
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+  try {
+    await refreshAll();
+  } catch (e) {
+    if (!/401/.test(e.message)) toast("加载目录失败: " + e.message, true);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+* text=auto
+
+# 必须在类 Unix 环境下直接执行的脚本
+*.sh text eol=lf
+gradlew text eol=lf
+*.py text eol=lf
+
+# Windows 批处理
+*.bat text eol=crlf
