@@ -1,6 +1,6 @@
 # MapEdit
 
-[![build](https://github.com/Lyricraft/MapEdit/actions/workflows/build.yml/badge.svg)](https://github.com/Lyricraft/MapEdit/actions/workflows/build.yml)
+[![build](https://github.com/yzi1b/map-edit/actions/workflows/build.yml/badge.svg)](https://github.com/yzi1b/map-edit/actions/workflows/build.yml)
 
 MapEdit 是一个 Paper 服务器插件：玩家在网页中上传图片、裁剪并保存为「地图画」，在游戏中获取或一键部署到墙上，自动铺满多格物品展示框。
 
