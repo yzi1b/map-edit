@@ -76,7 +76,16 @@ web:
   port: 35565                 # 监听端口
   uri: "http://localhost:35565/"   # 对外 URI，仅用于游戏内拼接链接（可配域名/反代）
   bind: 127.0.0.1             # 监听地址；0.0.0.0 监听所有网卡
+  path: ""                    # 访问路径前缀，如 /mapedit；默认空=根路径
   token-ttl-seconds: 600      # token 有效期；页面活跃时心跳续期
+```
+
+想挂到子路径（如 `http://localhost:35565/mapedit/`）时，把 `path` 设为 `/mapedit`、并相应调整 `uri`。反向代理可原样透传（无需重写路径），例如：
+
+```nginx
+location /mapedit/ {
+    proxy_pass http://127.0.0.1:35565/mapedit/;
+}
 ```
 
 Web 服务默认只监听本机回环地址。如需公网访问，请自行配置反向代理与 HTTPS，并评估安全风险（见下文「已知限制」）。

@@ -64,9 +64,14 @@ public final class WebServer {
         try {
             server = HttpServer.create(new InetSocketAddress(config.webBind(), config.webPort()), 64);
             server.createContext("/", this::route);
+            String basePath = config.webPath();
+            if (!basePath.isEmpty()) {
+                server.createContext(basePath, this::route);
+            }
             server.setExecutor(executor);
             server.start();
-            plugin.getLogger().info("Web 服务已启动: http://" + config.webBind() + ":" + config.webPort() + "/");
+            plugin.getLogger().info("Web 服务已启动: http://" + config.webBind() + ":" + config.webPort()
+                    + basePath + "/");
             return true;
         } catch (IOException e) {
             plugin.getLogger().severe("Web 服务启动失败: " + e.getMessage());
@@ -104,6 +109,19 @@ public final class WebServer {
     private void route(HttpExchange ex) throws IOException {
         try {
             String path = ex.getRequestURI().getPath();
+            // 子路径挂载：剥掉前缀后按根路径规则匹配（/mapedit/api/tree → /api/tree）。
+            // 实际前缀记到 exchange 属性，供页面注入使用——根 context 与 /mapedit context
+            // 都可能服务同一份代码，不能读全局配置区分。
+            String basePath = config.webPath();
+            if (!basePath.isEmpty() && (path.equals(basePath) || path.startsWith(basePath + "/"))) {
+                path = path.substring(basePath.length());
+                if (path.isEmpty()) {
+                    path = "/";
+                }
+            } else {
+                basePath = "";
+            }
+            ex.setAttribute("mapedit.base", basePath);
             String method = ex.getRequestMethod();
             if (path.equals("/") || path.equals("/index.html")) {
                 page(ex);
@@ -146,7 +164,12 @@ public final class WebServer {
                 send(ex, 500, "web/index.html 缺失".getBytes(StandardCharsets.UTF_8));
                 return;
             }
-            byte[] body = in.readAllBytes();
+            // 注入实际访问前缀：前端据此拼 API 绝对路径，使同一份页面在根/子路径下均可工作
+            Object attr = ex.getAttribute("mapedit.base");
+            String base = attr instanceof String s ? s : config.webPath();
+            String html = new String(in.readAllBytes(), StandardCharsets.UTF_8)
+                    .replace("__MAPEDIT_BASE__", GSON.toJson(base));
+            byte[] body = html.getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
             ex.getResponseHeaders().set("Cache-Control", "no-store");
             ex.sendResponseHeaders(200, body.length);

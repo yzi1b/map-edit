@@ -348,6 +348,8 @@ input[type=checkbox]{accent-color:var(--acc);width:15px;height:15px;margin:0}
 <div id="fatal"></div>
 
 <script>
+// 由服务端按 web.path 替换成实际挂载前缀（如 "/mapedit"；根路径为 ""），前端据此拼 API 路径
+window.MAPEDIT_BASE = __MAPEDIT_BASE__;
 "use strict";
 
 // ===== 图标(单色描边) =====
@@ -396,6 +398,8 @@ document.getElementById("fatal").onclick = () => {
 };
 
 // ===== 状态 =====
+// 服务端注入的挂载路径前缀（根路径为 ""，子路径如 "/mapedit"）；API 路径统一以 BASE 开头
+const BASE = window.MAPEDIT_BASE || "";
 const QS = new URLSearchParams(location.search);
 const TOKEN = QS.get("token") || "";
 let palette = [];          // index by signed byte b+128 -> int color
@@ -418,7 +422,7 @@ const $ = id => document.getElementById(id);
 const api = async (path, opts) => {
   const o = opts || {};
   o.headers = Object.assign({}, o.headers || {});
-  const url = path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN);
+  const url = BASE + path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN);
   const r = await fetch(url, o);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
@@ -1854,7 +1858,7 @@ function syncPathText() {
 // ===== 心跳续期(10 分钟 TTL,5 分钟一续) =====
 setInterval(async () => {
   try {
-    const r = await fetch("/api/renew?token=" + encodeURIComponent(TOKEN), { method: "POST" });
+      const r = await fetch(BASE + "/api/renew?token=" + encodeURIComponent(TOKEN), { method: "POST" });
     if (!r.ok) showSessionExpired();
   } catch (e) { /* 离线容忍 */ }
 }, 300000);

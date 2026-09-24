@@ -11,7 +11,7 @@
 | 地图写入 | ✅ 定稿 | **文件先行**:自分配高位 id(≥10 亿),自编码 NBT gzip 写 `data/minecraft/maps/<id>.dat`,自持游标 `next-map-id.txt`,不碰 vanilla 内存分配器 |
 | `/mapedit give` | ✅ | 行优先整画给背包(满则掉落提示) |
 | `/mapedit deploy` | ✅ 定稿 | 道具=左上地图+PDC;右键展示框自动铺格(墙面/地板/天花板),道具不消耗;异向帧忽略;可附着预检+中止报错;失败整体回滚。**2026-09-07 修正:按 level(存档)隔离、跨维度通用**(曾误按维度名绑定拒绝,已删校验与 world 字段) |
-| Web 服务 | ✅ | JDK HttpServer,127.0.0.1:35565;token(10min/心跳续期/换发吊销/重启全失效);**全响应 `Cache-Control: no-store`**;API 见 §4 |
+| Web 服务 | ✅ | JDK HttpServer,127.0.0.1:35565;**支持子路径挂载(`web.path`,默认空;根 context 保留兼容)**;token(10min/心跳续期/换发吊销/重启全失效);**全响应 `Cache-Control: no-store`**;API 见 §4 |
 | Web 前端 | ✅ 全新 | **2026-09-06 浅色现代极简三栏重制**,详见 §2 |
 | 指令 | ✅ 精简 | 仅 `web / give / deploy`;**开发指令与 dev 权限已全部移除**(devsolid/devmkdir/devinfo/devnet/devmapcolor/MapPacketProbe 已删,需要时照旧版重建) |
 
@@ -73,7 +73,7 @@
 
 部署两入口统一矩阵(2026-09-08):类型 = (荧光, 隐形) 二元组。**类型来源**:右键方块 → 一律设置值;右键展示框 → reference=true 时跟随该帧(荧光+隐形均跟随,补上旧逻辑漏的隐形),false 时用设置值。**force**:true = 每格清掉重建为来源类型(实体全换新);false = 已有帧格保留其类型与实体(内容仍覆盖为目标地图)。预检(支撑实心+前方无遮挡/水/岩浆,force 时全格、否则跳过有帧格)受**独立偏好 check 控制**:`/mapedit check false` 关闭后跳过预检(运行时失败仍回滚);check 为独立命令/偏好(依附玩家,存同 prefs.json),**不是 prefer 属性**。失败整体回滚(被清帧按原类型/隐形/内容重建)。几何统一 `Geometry.forSurface(attach, player)`。prefer 指令用逐词参数链(属性位提示四个属性名,值位提示 true/false;Brigadier 整段替换坑已避免)。
 
-Web API(?token=):`GET /`(页面,无效 token 亦返回页面由前端遮罩)、`GET /api/palette`、`GET /api/tree`、`POST /api/folder`、`POST /api/painting`(tiles base64 逐格行主序)、`POST /api/painting/replace`、`GET /api/painting?path=`、**`GET /api/thumb?path=`**(缩略图 PNG data URL,长边 ≤320,1024 项缓存,替换/删除按 world+pid 失效)、`DELETE /api/node?path=`(画或目录递归删除)、`POST /api/renew`、`GET /dev/tree`(无鉴权本地诊断,上生产前删除/加白名单)。
+Web API(?token=):`GET /`(页面,无效 token 亦返回页面由前端遮罩)、`GET /api/palette`、`GET /api/tree`、`POST /api/folder`、`POST /api/painting`(tiles base64 逐格行主序)、`POST /api/painting/replace`、`GET /api/painting?path=`、**`GET /api/thumb?path=`**(缩略图 PNG data URL,长边 ≤320,1024 项缓存,替换/删除按 world+pid 失效)、`DELETE /api/node?path=`(画或目录递归删除)、`POST /api/renew`、`GET /dev/tree`(无鉴权本地诊断,上生产前删除/加白名单)。**子路径:配置 `web.path`(如 `/mapedit`)后,上述所有端点同时挂在该前缀下,根路径仍保留;前端注入 `window.MAPEDIT_BASE` 据此拼 API 固定前缀**(2026-09-25 以 `web.path=/mapedit` 本机实测:/mapedit/ 页面注入 "/mapedit"、/ 注入 "";/mapedit/api/* 路由 401/200 正确;/xx/* 404;根路径兼容可用)。
 
 ## 7. 代码地图(src/main/java/cn/lyricraft/mapedit/)
 
@@ -85,7 +85,7 @@ Web API(?token=):`GET /`(页面,无效 token 亦返回页面由前端遮罩)、`
 - `storage/TreeData.java` JSON 模型(version=2)
 - `map/MapDataFile.java` 地图 dat 编码器(NBT writer)
 - `map/Thumbnail.java` **缩略图编码器**(像素表→区域平均降采样→PNG)
-- `web/WebServer.java` 路由/token/palette/thumb 缓存/dev-tree;全响应 no-store
+- `web/WebServer.java` 路由/token/palette/thumb 缓存/dev-tree;全响应 no-store;**子路径挂载**:`web.path` 非空时同时挂根与子路径两个 context,`route` 按前缀剥离后统一匹配,并把实际前缀写入 exchange 属性 `mapedit.base` 供页面注入(不能读全局 config 区分——两个 context 跑同一份代码);`page` 把 index.html 中 `__MAPEDIT_BASE__` 替换为 Gson 序列化的前缀
 - `web/TokenManager.java` token 会话(单活跃/续期复查权限/重启清空)
 - `deploy/DeployManager.java` 部署全部逻辑 + 校准表
 - 前端 `src/main/resources/web/index.html`(单文件,~1300 行:三栏布局 + 固定 4:3 新建/替换弹窗 + 交互裁剪引擎;裁剪/量化在 JS,棋盘为 CSS 背景类 `chessbg`)
